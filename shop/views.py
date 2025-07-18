@@ -4,10 +4,15 @@ from rest_framework.decorators import api_view, permission_classes, parser_class
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Product, Order
-from .serializers import ProductSerializer, OrderSerializer
+from .serializers import ProductSerializer, OrderSerializer, UserSerializer, ChatMessageSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import viewsets, permissions, status
+from rest_framework import generics
+from rest_framework.filters import SearchFilter
+from shop.models import ChatMessage
+
+from django.db import models
 
 # Create your views here.
 
@@ -108,3 +113,56 @@ def delete_product(request, pk):
         return Response({'message': 'Product deleted'}, status=status.HTTP_204_NO_CONTENT)
     except Product.DoesNotExist:
         return Response({'detail': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+
+from .models import Product
+from .serializers import ProductSerializer
+
+class ProductListView(generics.ListAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    filter_backends = [SearchFilter]
+    search_fields = ['name', 'brand', 'description']
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from .serializers import UserSerializer
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    print("Authenticated User:", request.user)  # Debug: confirm user from token
+    user = request.user
+    data = request.data
+
+    user.name = data.get("name", user.name)
+    user.email = data.get("email", user.email)
+    user.contact = data.get("contact", user.contact)
+    user.address = data.get("address", user.address)
+    user.save()
+
+    return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_user_profile(request):
+    user = request.user
+    return Response(UserSerializer(user).data)
+
+class ChatMessageListCreateView(generics.ListCreateAPIView):
+    serializer_class = ChatMessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        other_user_id = self.request.query_params.get('with')
+        if other_user_id:
+            return ChatMessage.objects.filter(
+                (models.Q(sender=user) & models.Q(recipient__id=other_user_id)) |
+                (models.Q(sender__id=other_user_id) & models.Q(recipient=user))
+            ).order_by('timestamp')
+        return ChatMessage.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(sender=self.request.user)
