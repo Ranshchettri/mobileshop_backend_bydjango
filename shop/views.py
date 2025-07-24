@@ -1,18 +1,23 @@
 from django.shortcuts import render
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Product, Order
-from .serializers import ProductSerializer, OrderSerializer, UserSerializer, ChatMessageSerializer
+from .models import Product, Order, OrderItem, CartItem, ShippingAddress, Review
+from .serializers import ProductSerializer, OrderSerializer, UserSerializer, ChatMessageSerializer, OrderItemSerializer, CartItemSerializer, ShippingAddressSerializer, ReviewSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from .serializers import MyTokenObtainPairSerializer, RegisterSerializer
+from rest_framework.permissions import AllowAny
+from rest_framework import generics
 from rest_framework import viewsets, permissions, status
 from rest_framework import generics
 from rest_framework.filters import SearchFilter
 from shop.models import ChatMessage
 
 from django.db import models
+from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 # Create your views here.
 
@@ -52,7 +57,7 @@ def get_all_products(request):
 def get_product_by_id(request, pk):
     try:
         product = Product.objects.get(id=pk)
-        serializer = ProductSerializer(product, many=False)
+        serializer = ProductSerializer(product)
         return Response(serializer.data)
     except Product.DoesNotExist:
         return Response({"detail": "Product not found"}, status=404)
@@ -60,21 +65,35 @@ def get_product_by_id(request, pk):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_all_orders(request):
-    orders = Order.objects.all().order_by('-ordered_at')
+    user = request.user
+    if user.is_staff or user.is_superuser:
+        orders = Order.objects.all()
+    else:
+        orders = Order.objects.filter(customer=user)
     serializer = OrderSerializer(orders, many=True)
     return Response(serializer.data)
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
+        user = self.user
+
         data['user'] = {
-            'email': self.user.email,
-            'isAdmin': self.user.is_staff,
+            'username': user.username,
+            'email': user.email,
+            'full_address': getattr(user, 'full_address', ''),
+            'contact': getattr(user, 'contact', ''),
+            'is_staff': user.is_staff,
+            'is_superuser': user.is_superuser,
         }
         return data
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        print("LOGIN DATA RECEIVED:", request.data)
+        return super().post(request, *args, **kwargs)
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all().order_by('-created_at')
@@ -82,11 +101,10 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Only admin can see all orders
-        if self.request.user.is_staff:
+        user = self.request.user
+        if user.is_staff or user.is_superuser:
             return Order.objects.all()
-        # Regular users see only their orders
-        return Order.objects.filter(customer=self.request.user)
+        return Order.objects.filter(customer=user)
 
 # Update Product
 @api_view(['PUT'])
@@ -108,11 +126,11 @@ def update_product(request, pk):
 @permission_classes([IsAuthenticated])
 def delete_product(request, pk):
     try:
-        product = Product.objects.get(id=pk)
+        product = Product.objects.get(pk=pk)
         product.delete()
-        return Response({'message': 'Product deleted'}, status=status.HTTP_204_NO_CONTENT)
+        return Response({"detail": "Product deleted."}, status=204)
     except Product.DoesNotExist:
-        return Response({'detail': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"detail": "Product not found."}, status=404)
 
 from .models import Product
 from .serializers import ProductSerializer
@@ -129,26 +147,36 @@ from rest_framework.response import Response
 from rest_framework import status
 from .serializers import UserSerializer
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_user_profile(request):
+    user = request.user
+    if user.is_superuser or user.is_staff:
+        role = "admin"
+    else:
+        role = "customer"
+    return Response({
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "contact": user.contact,
+        "address": user.address,
+        "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
+        "role": role,  # <-- add this line
+    })
+
 @api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def update_profile(request):
-    print("Authenticated User:", request.user)  # Debug: confirm user from token
     user = request.user
     data = request.data
-
     user.name = data.get("name", user.name)
     user.email = data.get("email", user.email)
     user.contact = data.get("contact", user.contact)
     user.address = data.get("address", user.address)
     user.save()
-
-    return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_user_profile(request):
-    user = request.user
-    return Response(UserSerializer(user).data)
+    return Response(UserSerializer(user).data, status=200)
 
 class ChatMessageListCreateView(generics.ListCreateAPIView):
     serializer_class = ChatMessageSerializer
@@ -166,3 +194,283 @@ class ChatMessageListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(sender=self.request.user)
+
+@api_view(['GET'])
+def productList(request):
+    products = Product.objects.all()
+    serializer = ProductSerializer(products, many=True)
+    return Response(serializer.data)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_order(request):
+    serializer = OrderSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save(customer=request.user)
+        return Response(serializer.data, status=201)
+    return Response(serializer.errors, status=400)
+
+from rest_framework import generics
+from .models import OrderItem, CartItem, ShippingAddress
+from .serializers import OrderItemSerializer, CartItemSerializer, ShippingAddressSerializer
+from rest_framework.permissions import IsAuthenticated
+
+class OrderItemListCreateView(generics.ListCreateAPIView):
+    queryset = OrderItem.objects.all()
+    serializer_class = OrderItemSerializer
+    permission_classes = [IsAuthenticated]
+
+class CartItemListCreateView(generics.ListCreateAPIView):
+    serializer_class = CartItemSerializer
+    permission_classes = [IsAuthenticated]
+    def get_queryset(self):
+        return CartItem.objects.filter(user=self.request.user)
+
+class ShippingAddressListCreateView(generics.ListCreateAPIView):
+    serializer_class = ShippingAddressSerializer
+    permission_classes = [IsAuthenticated]
+    def get_queryset(self):
+        return ShippingAddress.objects.filter(user=self.request.user)
+
+from .models import Review
+from .serializers import ReviewSerializer
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated, AllowAny
+
+class ReviewListCreateView(generics.ListCreateAPIView):
+    queryset = Review.objects.all()
+    serializer_class = ReviewSerializer
+    permission_classes = [IsAuthenticated]
+
+class ProductReviewListCreateView(generics.ListCreateAPIView):
+    serializer_class = ReviewSerializer
+    permission_classes = [AllowAny]
+    def get_queryset(self):
+        product_id = self.kwargs['pk']
+        return Review.objects.filter(product_id=product_id)
+    def perform_create(self, serializer):
+        serializer.save(product_id=self.kwargs['pk'], user=self.request.user)
+
+class UserListView(generics.ListAPIView):
+    queryset = get_user_model().objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+
+from .models import Product, CartItem, ShippingAddress, Order, OrderItem
+from .serializers import CartItemSerializer, ShippingAddressSerializer, OrderSerializer
+
+# ✅ GET & ADD cart items
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def cart_view(request):
+    user = request.user
+
+    if request.method == 'GET':
+        cart_items = CartItem.objects.filter(user=user)
+        serializer = CartItemSerializer(cart_items, many=True)
+        return Response(serializer.data)
+
+    elif request.method == 'POST':
+        product_id = request.data.get('product_id')
+        quantity = request.data.get('quantity', 1)
+
+        try:
+            product = Product.objects.get(id=product_id)
+        except Product.DoesNotExist:
+            return Response({'error': 'Product not found'}, status=404)
+
+        # Check if already in cart
+        cart_item, created = CartItem.objects.get_or_create(user=user, product=product)
+        if not created:
+            cart_item.quantity += int(quantity)
+        else:
+            cart_item.quantity = int(quantity)
+        cart_item.save()
+
+        serializer = CartItemSerializer(cart_item)
+        return Response(serializer.data, status=201)
+
+# ✅ DELETE cart item
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_cart_item(request, pk):
+    user = request.user
+    try:
+        item = CartItem.objects.get(user=user, id=pk)
+        item.delete()
+        return Response({'message': 'Item removed'}, status=204)
+    except CartItem.DoesNotExist:
+        return Response({'error': 'Item not found'}, status=404)
+
+# ✅ ADD/UPDATE shipping address
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_shipping_address(request):
+    user = request.user
+    address = request.data.get('address')
+    city = request.data.get('city')
+    postal_code = request.data.get('postal_code')
+    country = request.data.get('country')
+
+    shipping, created = ShippingAddress.objects.get_or_create(user=user)
+    shipping.address = address
+    shipping.city = city
+    shipping.postal_code = postal_code
+    shipping.country = country
+    shipping.save()
+
+    serializer = ShippingAddressSerializer(shipping)
+    return Response(serializer.data, status=201)
+
+# ✅ PLACE ORDER from cart
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def place_order(request):
+    user = request.user
+    cart_items = CartItem.objects.filter(user=user)
+
+    if not cart_items.exists():
+        return Response({'error': 'No items in cart'}, status=400)
+
+    # Calculate total price
+    total = sum(item.product.price * item.quantity for item in cart_items)
+
+    try:
+        shipping = ShippingAddress.objects.get(user=user)
+    except ShippingAddress.DoesNotExist:
+        return Response({'error': 'No shipping address'}, status=400)
+
+    order = Order.objects.create(user=user, total_price=total, shipping_address=shipping)
+
+    for item in cart_items:
+        OrderItem.objects.create(
+            order=order,
+            product=item.product,
+            quantity=item.quantity,
+            price=item.product.price
+        )
+
+    cart_items.delete()
+
+    serializer = OrderSerializer(order)
+    return Response(serializer.data, status=201)
+
+class CartItemViewSet(viewsets.ModelViewSet):
+    queryset = CartItem.objects.all()
+    serializer_class = CartItemSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return CartItem.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        product = serializer.validated_data['product']
+        quantity = serializer.validated_data.get('quantity', 1)
+
+        # Check if item already in cart
+        cart_item, created = CartItem.objects.get_or_create(
+            user=self.request.user,
+            product=product,
+            defaults={'quantity': quantity}
+        )
+        if not created:
+            cart_item.quantity += quantity
+            cart_item.save()
+        return cart_item
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        cart_item = self.perform_create(serializer)
+        serializer = self.get_serializer(cart_item)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['delete'])
+    def clear(self, request):
+        CartItem.objects.filter(user=request.user).delete()
+        return Response({"status": "cart cleared"})
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework_simplejwt.tokens import RefreshToken
+from .serializers import RegisterSerializer, LoginSerializer
+from django.db import IntegrityError
+
+class RegisterView(APIView):
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                user = serializer.save()
+                return Response({"message": "User registered successfully"}, status=status.HTTP_201_CREATED)
+            except IntegrityError:
+                return Response({"error": "Email already exists."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class LoginView(APIView):
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
+            refresh = RefreshToken.for_user(user)
+
+            # Role logic: admin/seller or customer
+            if user.is_superuser or user.is_staff:
+                role = "admin"
+            else:
+                role = "customer"
+
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'full_name': user.full_name,
+                    'contact': user.contact,
+                    'address': user.address,
+                    'is_staff': user.is_staff,
+                    'is_superuser': user.is_superuser,
+                    'role': role,  # <-- add this line
+                }
+            })
+        return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
+
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
+from .models import User
+from .serializers import UserSerializer
+
+class UserView(generics.RetrieveUpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+from rest_framework import generics, status
+from rest_framework.response import Response
+from django.contrib.auth import get_user_model
+from .serializers import UserSerializer
+
+User = get_user_model()
+
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                user = serializer.save()
+                return Response({"message": "User created successfully"}, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

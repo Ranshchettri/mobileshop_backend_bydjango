@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Product, Order, OrderItem, CartItem, ShippingAddress, ChatMessage, User
+from .models import Product, Order, OrderItem, CartItem, ShippingAddress, ChatMessage, User, ChatThread, Message
 
 admin.site.register(Product)
 
@@ -14,3 +14,5 @@ admin.site.register(CartItem)
 admin.site.register(ShippingAddress)
 admin.site.register(ChatMessage)
 admin.site.register(User)
+admin.site.register(ChatThread)
+admin.site.register(Message)
