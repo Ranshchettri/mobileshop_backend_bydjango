@@ -204,11 +204,26 @@ def productList(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_order(request):
-    serializer = OrderSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save(customer=request.user)
-        return Response(serializer.data, status=201)
-    return Response(serializer.errors, status=400)
+    print(request.data)  # Debug incoming payload
+
+    items = request.data.get('items')
+    if items:
+        orders = []
+        for item in items:
+            serializer = OrderSerializer(data=item)
+            if serializer.is_valid():
+                order = serializer.save(customer=request.user)
+                orders.append(OrderSerializer(order).data)
+            else:
+                return Response(serializer.errors, status=400)
+        return Response({'orders': orders}, status=201)
+    else:
+        # Try single item payload
+        serializer = OrderSerializer(data=request.data)
+        if serializer.is_valid():
+            order = serializer.save(customer=request.user)
+            return Response(OrderSerializer(order).data, status=201)
+        return Response(serializer.errors, status=400)
 
 from rest_framework import generics
 from .models import OrderItem, CartItem, ShippingAddress

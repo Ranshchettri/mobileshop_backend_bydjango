@@ -40,12 +40,10 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 # ✅ Order Serializer
 class OrderSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True, read_only=True)
-    customer_email = serializers.CharField(source='customer.email', read_only=True)
-
+    customer = serializers.PrimaryKeyRelatedField(read_only=True)
     class Meta:
         model = Order
-        fields = '__all__'
+        fields = ['id', 'customer', 'product', 'quantity', 'total_price', 'status', 'created_at']
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -120,8 +118,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 class ChatMessageSerializer(serializers.ModelSerializer):
-    sender_name = serializers.CharField(source='sender.username', read_only=True)
-    recipient_name = serializers.CharField(source='recipient.username', read_only=True)
+    sender_name = serializers.CharField(source='sender.email', read_only=True)
+    recipient_name = serializers.CharField(source='recipient.email', read_only=True)
 
     class Meta:
         model = ChatMessage
