@@ -1,14 +1,14 @@
 from django.contrib import admin
 from .models import Product, Order, OrderItem, CartItem, ShippingAddress, ChatMessage, User, ChatThread, Message
 
-admin.site.register(Product)
-
-@admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'customer', 'product', 'quantity', 'total_price', 'status', 'created_at')
-    list_filter = ('status', 'created_at')
-    search_fields = ('customer__username', 'product__name')
+    list_display = ('id', 'customer', 'total_price', 'status', 'created_at', 'order_items')
 
+    def order_items(self, obj):
+        return ", ".join([f"{item.product.name} x {item.quantity}" for item in obj.items.all()])
+
+admin.site.register(Product)
+admin.site.register(Order, OrderAdmin)
 admin.site.register(OrderItem)
 admin.site.register(CartItem)
 admin.site.register(ShippingAddress)

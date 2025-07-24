@@ -31,19 +31,12 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
 
 # ✅ Order Item Serializer
 class OrderItemSerializer(serializers.ModelSerializer):
-    product = ProductSerializer(read_only=True)
+    name = serializers.CharField(source='product.name', read_only=True)
+    image = serializers.ImageField(source='product.image', read_only=True)
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product', 'quantity', 'price']
-
-
-# ✅ Order Serializer
-class OrderSerializer(serializers.ModelSerializer):
-    customer = serializers.PrimaryKeyRelatedField(read_only=True)
-    class Meta:
-        model = Order
-        fields = ['id', 'customer', 'product', 'quantity', 'total_price', 'status', 'created_at']
+        fields = ['id', 'name', 'image', 'quantity', 'price']
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -129,3 +122,18 @@ class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
         fields = '__all__'
+
+class CustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('full_name', 'email', 'contact', 'address')
+
+# ✅ Order Serializer
+class OrderSerializer(serializers.ModelSerializer):
+    customer = CustomerSerializer(read_only=True)
+    items = OrderItemSerializer(many=True, read_only=True)
+    date = serializers.DateTimeField(source='created_at', format='%Y-%m-%dT%H:%M:%S.%fZ', read_only=True)
+
+    class Meta:
+        model = Order
+        fields = ['id', 'customer', 'total_price', 'status', 'date', 'items']
