@@ -43,7 +43,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'password', 'full_name', 'contact', 'address')
+        fields = ('id', 'email', 'password', 'full_name', 'contact', 'address', 'is_active')
 
     def create(self, validated_data):
         user = User.objects.create_user(
@@ -63,10 +63,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ('email', 'full_name', 'password', 'contact', 'address')
 
     def create(self, validated_data):
-        validated_data['is_staff'] = False
-        validated_data['is_superuser'] = False
-        user = User.objects.create_user(**validated_data)
-        return user
+        validated_data['is_active'] = True  # always active by default
+        return User.objects.create(**validated_data)
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()

@@ -18,6 +18,7 @@ from .views import (
     RegisterView,
     LoginView,
     ProductViewSet,
+    UserViewSet,
 )
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -25,6 +26,7 @@ router = DefaultRouter()
 router.register(r'orders', OrderViewSet, basename='orders')
 router.register(r'cart', CartItemViewSet, basename='cart')
 router.register(r'products', ProductViewSet, basename='product')
+router.register(r'users', UserViewSet, basename='user')
 
 urlpatterns = [
     # Cart
