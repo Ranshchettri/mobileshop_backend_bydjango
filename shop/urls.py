@@ -17,18 +17,16 @@ from .views import (
     CartItemViewSet,
     RegisterView,
     LoginView,
+    ProductViewSet,
 )
 from rest_framework_simplejwt.views import TokenRefreshView
 
 router = DefaultRouter()
 router.register(r'orders', OrderViewSet, basename='orders')
 router.register(r'cart', CartItemViewSet, basename='cart')
+router.register(r'products', ProductViewSet, basename='product')
 
 urlpatterns = [
-    # Product
-    path('products/', views.get_all_products, name='get-products'),
-    path('products/<int:pk>/', views.get_product_by_id, name='get-product'),
-
     # Cart
     path('cart/', views.cart_view, name='cart-view'),
     path('cart/<int:pk>/', views.delete_cart_item, name='cart-item-delete'),
