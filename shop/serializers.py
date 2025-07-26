@@ -31,12 +31,11 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
 
 # ✅ Order Item Serializer
 class OrderItemSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source='product.name', read_only=True)
-    image = serializers.ImageField(source='product.image', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'name', 'image', 'quantity', 'price']
+        fields = ['id', 'product', 'product_name', 'quantity', 'price']
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -129,42 +128,13 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 # ✅ Order Serializer
 class OrderSerializer(serializers.ModelSerializer):
-    user = serializers.SerializerMethodField()
-    items = serializers.SerializerMethodField()
-    date = serializers.SerializerMethodField()  # Add this
+    user = UserSerializer(read_only=True)
+    items = OrderItemSerializer(many=True, read_only=True)
+    date = serializers.DateTimeField(source='created_at', format="%m/%d/%Y, %I:%M:%S %p", read_only=True)
 
     class Meta:
         model = Order
         fields = [
-            "id",
-            "user",
-            "total_price",
-            "order_status",
-            "payment_status",
-            "created_at",
-            "date",         # Add this
-            "items",
+            'id', 'user', 'total_price', 'payment_method', 'payment_status', 'order_status',
+            'date', 'items'
         ]
-
-    def get_user(self, obj):
-        user = obj.user
-        return {
-            "full_name": getattr(user, "full_name", ""),
-            "email": getattr(user, "email", ""),
-            "contact": getattr(user, "contact", ""),
-            "address": getattr(user, "address", ""),
-        }
-
-    def get_items(self, obj):
-        return [
-            {
-                "name": getattr(item.product, "name", ""),
-                "quantity": item.quantity,
-                "price": item.price,
-            }
-            for item in obj.items.all()
-        ]
-
-    def get_date(self, obj):
-        # Format date as string, e.g. "2025-07-26 19:45"
-        return obj.created_at.strftime("%Y-%m-%d %H:%M") if obj.created_at else "N/A"

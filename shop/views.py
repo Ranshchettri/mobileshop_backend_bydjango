@@ -210,7 +210,10 @@ def create_order(request):
     items = data.get("items", [])
 
     # Calculate total price from items
-    total_price = sum([item["quantity"] * item["price"] for item in items])
+    total_price = sum(
+        int(item["quantity"]) * float(item["price"])
+        for item in items
+    )
 
     # Create Order
     order = Order.objects.create(
