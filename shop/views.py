@@ -564,3 +564,33 @@ def list_orders(request):
     orders = Order.objects.filter(user=user).order_by('-created_at')
     serializer = OrderSerializer(orders, many=True)
     return Response(serializer.data)
+
+from rest_framework import serializers
+
+class MostSellingProductSerializer(serializers.Serializer):
+    product = serializers.IntegerField()
+    quantity_sold = serializers.IntegerField()
+
+class MostSellingProductsView(generics.ListAPIView):
+    serializer_class = MostSellingProductSerializer
+
+    def get_queryset(self):
+        qs = (
+            OrderItem.objects
+            .values("product")
+            .annotate(quantity_sold=Sum("quantity"))
+            .order_by("-quantity_sold")
+        )
+        # Attach product name and image to each result
+        product_ids = [item["product"] for item in qs]
+        products = Product.objects.in_bulk(product_ids)
+        result = []
+        for item in qs:
+            product = products.get(item["product"])
+            result.append({
+                "product": item["product"],
+                "name": product.name if product else "",
+                "image": product.image.url if product and product.image else "",
+                "quantity_sold": item["quantity_sold"],
+            })
+        return result

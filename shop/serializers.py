@@ -12,7 +12,7 @@ User = get_user_model()
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = '__all__'
+        fields = '__all__'  # or include 'image' in the fields list
 
 
 # ✅ Cart Item Serializer
@@ -32,11 +32,20 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
 # ✅ Order Item Serializer
 class OrderItemSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="product.name", read_only=True)
-    image = serializers.ImageField(source="product.image", read_only=True)
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
         fields = ["id", "product", "name", "quantity", "price", "image"]
+
+    def get_image(self, obj):
+        request = self.context.get('request')
+        if obj.product and obj.product.image:
+            image_url = obj.product.image.url
+            if request is not None:
+                return request.build_absolute_uri(image_url)
+            return image_url
+        return None
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -139,3 +148,9 @@ class OrderSerializer(serializers.ModelSerializer):
             'id', 'user', 'total_price', 'payment_method', 'payment_status', 'order_status',
             'date', 'items'
         ]
+
+class MostSellingProductSerializer(serializers.Serializer):
+    product = serializers.IntegerField()
+    name = serializers.CharField()
+    image = serializers.CharField()
+    quantity_sold = serializers.IntegerField()
