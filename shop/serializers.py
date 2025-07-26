@@ -130,16 +130,18 @@ class CustomerSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     user = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
+    date = serializers.SerializerMethodField()  # Add this
 
     class Meta:
         model = Order
         fields = [
             "id",
-            "user",           # <-- change from "customer" to "user"
+            "user",
             "total_price",
             "order_status",
             "payment_status",
             "created_at",
+            "date",         # Add this
             "items",
         ]
 
@@ -161,3 +163,7 @@ class OrderSerializer(serializers.ModelSerializer):
             }
             for item in obj.items.all()
         ]
+
+    def get_date(self, obj):
+        # Format date as string, e.g. "2025-07-26 19:45"
+        return obj.created_at.strftime("%Y-%m-%d %H:%M") if obj.created_at else "N/A"
