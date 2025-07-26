@@ -103,10 +103,12 @@ class ChatMessage(models.Model):
         return f"{self.sender.email} ➜ {self.recipient.email}: {self.message[:30]}"
 
 class Review(models.Model):
-    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='reviews')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     rating = models.IntegerField()
     comment = models.TextField()
+    user_name = models.CharField(max_length=255, blank=True, null=True)
+    anonymous = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

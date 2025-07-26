@@ -119,7 +119,8 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
-        fields = '__all__'
+        fields = ['id', 'product', 'user', 'rating', 'comment', 'user_name', 'anonymous', 'created_at']
+        read_only_fields = ['id', 'product', 'user', 'created_at']
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:

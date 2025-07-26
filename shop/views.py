@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.decorators import api_view, permission_classes, parser_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.parsers import MultiPartParser, FormParser
 from .models import Product, Order, OrderItem, CartItem, ShippingAddress, Review
 from .serializers import ProductSerializer, OrderSerializer, UserSerializer, ChatMessageSerializer, OrderItemSerializer, CartItemSerializer, ShippingAddressSerializer, ReviewSerializer
@@ -267,12 +267,16 @@ class ReviewListCreateView(generics.ListCreateAPIView):
 
 class ProductReviewListCreateView(generics.ListCreateAPIView):
     serializer_class = ReviewSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get_queryset(self):
-        product_id = self.kwargs['pk']
-        return Review.objects.filter(product_id=product_id)
+        return Review.objects.filter(product_id=self.kwargs["pk"])
+
     def perform_create(self, serializer):
-        serializer.save(product_id=self.kwargs['pk'], user=self.request.user)
+        serializer.save(
+            product_id=self.kwargs["pk"],
+            user=self.request.user
+        )
 
 class UserListView(generics.ListAPIView):
     queryset = get_user_model().objects.all()
