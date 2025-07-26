@@ -31,11 +31,12 @@ class ShippingAddressSerializer(serializers.ModelSerializer):
 
 # ✅ Order Item Serializer
 class OrderItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
+    name = serializers.CharField(source="product.name", read_only=True)
+    image = serializers.ImageField(source="product.image", read_only=True)
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product', 'product_name', 'quantity', 'price']
+        fields = ["id", "product", "name", "quantity", "price", "image"]
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
