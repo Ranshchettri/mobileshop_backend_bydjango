@@ -128,10 +128,36 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 # ✅ Order Serializer
 class OrderSerializer(serializers.ModelSerializer):
-    customer = CustomerSerializer(read_only=True)
-    items = OrderItemSerializer(many=True, read_only=True)
-    date = serializers.DateTimeField(source='created_at', format='%Y-%m-%dT%H:%M:%S.%fZ', read_only=True)
+    user = serializers.SerializerMethodField()
+    items = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
-        fields = ['id', 'customer', 'total_price', 'status', 'date', 'items']
+        fields = [
+            "id",
+            "user",           # <-- change from "customer" to "user"
+            "total_price",
+            "order_status",
+            "payment_status",
+            "created_at",
+            "items",
+        ]
+
+    def get_user(self, obj):
+        user = obj.user
+        return {
+            "full_name": getattr(user, "full_name", ""),
+            "email": getattr(user, "email", ""),
+            "contact": getattr(user, "contact", ""),
+            "address": getattr(user, "address", ""),
+        }
+
+    def get_items(self, obj):
+        return [
+            {
+                "name": getattr(item.product, "name", ""),
+                "quantity": item.quantity,
+                "price": item.price,
+            }
+            for item in obj.items.all()
+        ]

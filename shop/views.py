@@ -18,6 +18,7 @@ from shop.models import ChatMessage
 from django.db import models
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.db.models import Sum
 
 # Create your views here.
 
@@ -69,7 +70,7 @@ def get_all_orders(request):
     if user.is_staff or user.is_superuser:
         orders = Order.objects.all()
     else:
-        orders = Order.objects.filter(customer=user)
+        orders = Order.objects.filter(user=user)  # <-- FIXED HERE
     serializer = OrderSerializer(orders, many=True)
     return Response(serializer.data)
 
@@ -213,9 +214,11 @@ def create_order(request):
 
     # Create Order
     order = Order.objects.create(
-        customer=user,
+        user=user,
         total_price=total_price,
-        status="pending"
+        payment_method=data.get("payment_method", "COD"),
+        payment_status="pending",
+        order_status="pending"
     )
 
     # Create OrderItem for each cart item
@@ -352,30 +355,29 @@ def add_shipping_address(request):
 @permission_classes([IsAuthenticated])
 def place_order(request):
     user = request.user
-    cart_items = CartItem.objects.filter(user=user)
+    items = request.data.get('items', [])
+    payment_method = request.data.get('payment_method', 'COD')
 
-    if not cart_items.exists():
-        return Response({'error': 'No items in cart'}, status=400)
+    total = sum([item['quantity'] * item['price'] for item in items])
 
-    # Calculate total price
-    total = sum(item.product.price * item.quantity for item in cart_items)
+    order = Order.objects.create(
+        user=user,
+        total_price=total,
+        payment_method=payment_method,
+        payment_status='pending',
+        order_status='pending'
+    )
 
-    try:
-        shipping = ShippingAddress.objects.get(user=user)
-    except ShippingAddress.DoesNotExist:
-        return Response({'error': 'No shipping address'}, status=400)
-
-    order = Order.objects.create(user=user, total_price=total, shipping_address=shipping)
-
-    for item in cart_items:
+    for item in items:
         OrderItem.objects.create(
             order=order,
-            product=item.product,
-            quantity=item.quantity,
-            price=item.product.price
+            product_id=item['product'],
+            quantity=item['quantity'],
+            price=item['price']
         )
 
-    cart_items.delete()
+    # Optionally clear cart
+    CartItem.objects.filter(user=user).delete()
 
     serializer = OrderSerializer(order)
     return Response(serializer.data, status=201)
@@ -520,3 +522,38 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAdminUser]  # Only admin can update users
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_stats(request):
+    total_orders = Order.objects.count()
+    total_revenue = Order.objects.aggregate(total=Sum('total_price'))['total'] or 0
+
+    # Most selling products
+    product_sales = (
+        OrderItem.objects.values(
+            'product__id',
+            'product__name',
+            'product__image'
+        )
+        .annotate(quantity_sold=Sum('quantity'))
+        .order_by('-quantity_sold')
+    )
+
+    most_selling_products = list(product_sales)
+    best_product = most_selling_products[0] if most_selling_products else None
+
+    return Response({
+        "total_orders": total_orders,
+        "total_revenue": total_revenue,
+        "best_product": best_product,
+        "most_selling_products": most_selling_products,
+    })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_orders(request):
+    user = request.user
+    orders = Order.objects.filter(user=user).order_by('-created_at')
+    serializer = OrderSerializer(orders, many=True)
+    return Response(serializer.data)
