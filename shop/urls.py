@@ -62,6 +62,10 @@ urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    # Additional URLs
+    path('orders/<int:pk>/status/', views.update_order_status, name='update_order_status'),
+    path('notifications/', views.user_notifications, name='user_notifications'),
 ]
 
 

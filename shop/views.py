@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Product, Order, OrderItem, CartItem, ShippingAddress, Review
+from .models import Product, Order, OrderItem, CartItem, ShippingAddress, Review, Notification
 from .serializers import ProductSerializer, OrderSerializer, UserSerializer, ChatMessageSerializer, OrderItemSerializer, CartItemSerializer, ShippingAddressSerializer, ReviewSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import MyTokenObtainPairSerializer, RegisterSerializer
@@ -594,3 +594,32 @@ class MostSellingProductsView(generics.ListAPIView):
                 "quantity_sold": item["quantity_sold"],
             })
         return result
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from .models import Order, Notification
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_order_status(request, pk):
+    order = Order.objects.get(pk=pk)
+    new_status = request.data.get('order_status')
+    order.order_status = new_status
+    order.save()
+    # Send notification to the user
+    Notification.objects.create(
+        user=order.user,
+        message=f"Your order #{order.id} status changed to {new_status.capitalize()}."
+    )
+    return Response({'success': True})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_notifications(request):
+    notifications = Notification.objects.filter(user=request.user).order_by('-created_at')
+    data = [
+        {"message": n.message, "created_at": n.created_at, "is_read": n.is_read}
+        for n in notifications
+    ]
+    return Response(data)
