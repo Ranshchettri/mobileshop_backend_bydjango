@@ -607,7 +607,7 @@ def update_order_status(request, pk):
     new_status = request.data.get('order_status')
     order.order_status = new_status
     order.save()
-    # Send notification to the user
+    print("Creating notification for user:", order.user)  # Debug line
     Notification.objects.create(
         user=order.user,
         message=f"Your order #{order.id} status changed to {new_status.capitalize()}."
