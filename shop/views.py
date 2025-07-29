@@ -632,3 +632,43 @@ def user_notifications(request):
         for n in notifications
     ]
     return Response(data)
+
+from django.contrib.auth import get_user_model
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_admin_id(request):
+    User = get_user_model()
+    admin = User.objects.filter(is_staff=True).first()
+    if admin:
+        return Response({'admin_id': admin.id})
+    return Response({'error': 'Admin not found'}, status=404)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_chat_users(request):
+    # Only admin can access
+    if not request.user.is_staff:
+        return Response({'error': 'Unauthorized'}, status=403)
+    # All users except admin
+    users = User.objects.exclude(id=request.user.id)
+    data = [{'id': u.id, 'email': u.email, 'full_name': u.full_name} for u in users]
+    return Response(data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_all_messages(request):
+    if not request.user.is_staff:
+        return Response({'error': 'Unauthorized'}, status=403)
+    messages = ChatMessage.objects.filter(recipient=request.user).order_by('-timestamp')
+    data = [
+        {
+            'id': m.id,
+            'sender_id': m.sender.id,
+            'sender_email': m.sender.email,
+            'message': m.message,
+            'timestamp': m.timestamp
+        }
+        for m in messages
+    ]
+    return Response(data)
