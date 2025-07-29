@@ -595,10 +595,19 @@ class MostSellingProductsView(generics.ListAPIView):
             })
         return result
 
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from .models import Order, Notification
+def get_order_status_message(order, status):
+    if status == "pending":
+        return f"Your order #{order.id} has been placed."
+    elif status == "processing":
+        return f"Your order #{order.id} is being processed by the seller."
+    elif status == "shipped":
+        return f"Your order #{order.id} has been shipped from the seller's warehouse."
+    elif status == "delivered":
+        return f"Order #{order.id} delivered successfully! Thank you for choosing us. Don't forget to give a review for a better experience."
+    elif status == "cancelled":
+        return f"Your order #{order.id} was cancelled by the seller. Please contact or chat with the seller."
+    else:
+        return f"Your order #{order.id} status changed to {status.capitalize()}."
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
@@ -607,10 +616,10 @@ def update_order_status(request, pk):
     new_status = request.data.get('order_status')
     order.order_status = new_status
     order.save()
-    print("Creating notification for user:", order.user)  # Debug line
+    message = get_order_status_message(order, new_status)
     Notification.objects.create(
         user=order.user,
-        message=f"Your order #{order.id} status changed to {new_status.capitalize()}."
+        message=message
     )
     return Response({'success': True})
 
