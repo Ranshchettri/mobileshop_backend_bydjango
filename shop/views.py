@@ -617,8 +617,11 @@ def update_order_status(request, pk):
     order.order_status = new_status
     order.save()
     message = get_order_status_message(order, new_status)
+    # Create notification with order and status
     Notification.objects.create(
         user=order.user,
+        order=order,           # <-- add this line
+        status=new_status,     # <-- add this line (if your model has 'status' field)
         message=message
     )
     return Response({'success': True})
